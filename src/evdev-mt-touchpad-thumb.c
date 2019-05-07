@@ -187,7 +187,9 @@ tp_thumb_update(struct tp_dispatch *tp, struct tp_touch *t)
 	 */
 	if (t->speed.exceeded_count >= 10 &&
 	    tp->thumb.pinch_eligible &&
-	    tp->gesture.state == GESTURE_STATE_NONE) {
+	    (tp->gesture.state == GESTURE_STATE_NONE ||
+	     tp->gesture.state == GESTURE_STATE_SCROLL ||
+	     tp->gesture.state == GESTURE_STATE_SWIPE)) {
 		tp->thumb.pinch_eligible = false;
 		if(tp->thumb.state == THUMB_STATE_PINCH)
 			tp->thumb.state = THUMB_STATE_SUPPRESSED; //TODO log
@@ -291,7 +293,7 @@ tp_thumb_update_by_context(struct tp_dispatch *tp)
 	 * 2-finger scroll.
 	 */
 	if (newest &&
-	    tp->nfingers_down == 2 &&
+	    tp->nfingers_down >= 2 &&
 	    speed_exceeded_count > 5 &&
 	    (tp->scroll.method != LIBINPUT_CONFIG_SCROLL_2FG ||
 	     (mm.x > SCROLL_MM_X && mm.y > SCROLL_MM_Y))) {
