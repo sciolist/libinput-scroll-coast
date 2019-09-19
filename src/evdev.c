@@ -204,11 +204,12 @@ evdev_scroll_coast_timeout(uint64_t time, void *data)
 	static const double decay_time = 1.5 * 1000000;
 	
 	double progress = 1 - (double)((time - device->scroll_coast.start)) / decay_time;
-	double multiplier = progress;
+	double multiplier = progress * 0.7;
+	multiplier = 0.35 * (progress*progress*progress);
 	
 	struct normalized_coords dist = {
-		(progress <= 0 ? 0 : device->scroll_coast.x * multiplier * 0.7),
-		(progress <= 0 ? 0 : device->scroll_coast.y * multiplier * 0.7)
+		(progress <= 0 ? 0 : device->scroll_coast.x * multiplier),
+		(progress <= 0 ? 0 : device->scroll_coast.y * multiplier)
 	};
 	double abs = (dist.x < 0 ? -dist.x : dist.x) + (dist.y < 0 ? -dist.y : dist.y);
 	if (abs < 0.001) {
@@ -1694,6 +1695,7 @@ evdev_disable_accelerometer_axes(struct evdev_device *device)
 static struct evdev_dispatch *
 evdev_configure_device(struct evdev_device *device)
 {
+	evdev_init_scroll_coast(device);
 	struct libevdev *evdev = device->evdev;
 	enum evdev_device_udev_tags udev_tags;
 	unsigned int tablet_tags;
