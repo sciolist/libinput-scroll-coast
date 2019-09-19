@@ -196,6 +196,40 @@ evdev_button_scroll_timeout(uint64_t time, void *data)
 }
 
 static void
+evdev_scroll_coast_timeout(uint64_t time, void *data)
+{
+	struct evdev_device *device = data;
+	if (!device->scroll_coast.start) return;
+
+	static const double decay_time = 0.8 * 1000000;
+	
+	double progress = 1 - (double)((time - device->scroll_coast.start)) / decay_time;
+	double multiplier = progress;
+	
+	struct normalized_coords dist = {
+		(progress <= 0 ? 0 : device->scroll_coast.x * multiplier * 0.7),
+		(progress <= 0 ? 0 : device->scroll_coast.y * multiplier * 0.7)
+	};
+	double abs = (dist.x < 0 ? -dist.x : dist.x) + (dist.y < 0 ? -dist.y : dist.y);
+	if (abs < 0.001) {
+		dist.x = dist.y = 0;
+	}
+
+	const struct discrete_coords dist_discrete = { 0.0, 0.0 };
+
+	pointer_notify_axis(&device->base,
+				time,
+				device->scroll_coast.direction,
+				LIBINPUT_POINTER_AXIS_SOURCE_FINGER,
+				&dist,
+				&dist_discrete);
+
+	if (progress > 0 && abs > 0.001) {
+		libinput_timer_set_flags(&device->scroll_coast.timer, time + (16 * 1000), TIMER_FLAG_NONE);
+	}
+}
+
+static void
 evdev_button_scroll_button(struct evdev_device *device,
 			   uint64_t time, int is_press)
 {
@@ -762,6 +796,23 @@ evdev_scroll_config_natural_get_default(struct libinput_device *device)
 	/* could enable this on Apple touchpads. could do that, could
 	 * very well do that... */
 	return 0;
+}
+
+void
+evdev_init_scroll_coast(struct evdev_device *device)
+{
+
+	char timer_name[64];
+
+	snprintf(timer_name,
+		 sizeof(timer_name),
+		 "%s coast",
+		 evdev_device_get_sysname(device));
+
+	libinput_timer_init(&device->scroll_coast.timer,
+			    evdev_libinput_context(device),
+			    timer_name,
+			    evdev_scroll_coast_timeout, device);
 }
 
 void
@@ -2070,7 +2121,7 @@ evdev_device_create(struct libinput_seat *seat,
 	device->dispatch = NULL;
 	device->fd = fd;
 	device->devname = libevdev_get_name(device->evdev);
-	device->scroll.threshold = 5.0; /* Default may be overridden */
+	device->scroll.threshold = 0.1; /* Default may be overridden */
 	device->scroll.direction_lock_threshold = 5.0; /* Default may be overridden */
 	device->scroll.direction = 0;
 	device->scroll.wheel_click_angle =
@@ -2407,6 +2458,7 @@ evdev_start_scrolling(struct evdev_device *device,
 	       axis == LIBINPUT_POINTER_AXIS_SCROLL_VERTICAL);
 
 	device->scroll.direction |= bit(axis);
+	device->scroll_coast.start = 0;
 }
 
 void
@@ -2465,8 +2517,15 @@ evdev_post_scroll(struct evdev_device *device,
 	if (!evdev_is_scrolling(device,
 			       LIBINPUT_POINTER_AXIS_SCROLL_HORIZONTAL))
 		event.x = 0.0;
-
+	
 	if (!normalized_is_zero(event)) {
+		device->scroll_coast.x = event.x;
+		device->scroll_coast.y = event.y;
+		device->scroll_coast.direction = device->scroll.direction;
+		if (abs(event.x) + abs(event.y) > 0.2) {
+			device->scroll_coast.start = time;
+		}
+		
 		const struct discrete_coords zero_discrete = { 0.0, 0.0 };
 		uint32_t axes = device->scroll.direction;
 
@@ -2484,6 +2543,7 @@ evdev_post_scroll(struct evdev_device *device,
 	}
 }
 
+
 void
 evdev_stop_scroll(struct evdev_device *device,
 		  uint64_t time,
@@ -2492,15 +2552,10 @@ evdev_stop_scroll(struct evdev_device *device,
 	const struct normalized_coords zero = { 0.0, 0.0 };
 	const struct discrete_coords zero_discrete = { 0.0, 0.0 };
 
-	/* terminate scrolling with a zero scroll event */
-	if (device->scroll.direction != 0)
-		pointer_notify_axis(&device->base,
-				    time,
-				    device->scroll.direction,
-				    source,
-				    &zero,
-				    &zero_discrete);
-
+	if (time - device->scroll_coast.start < 65000) {
+		libinput_timer_set_flags(&device->scroll_coast.timer, time + 1000, TIMER_FLAG_NONE);
+	}
+	
 	device->scroll.buildup.x = 0;
 	device->scroll.buildup.y = 0;
 	device->scroll.direction = 0;
@@ -2688,6 +2743,7 @@ evdev_device_destroy(struct evdev_device *device)
 	free(device->output_name);
 	filter_destroy(device->pointer.filter);
 	libinput_timer_destroy(&device->scroll.timer);
+	libinput_timer_destroy(&device->scroll_coast.timer);
 	libinput_timer_destroy(&device->middlebutton.timer);
 	libinput_seat_unref(device->base.seat);
 	libevdev_free(device->evdev);

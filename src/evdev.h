@@ -193,6 +193,13 @@ struct evdev_device {
 
 	struct {
 		struct libinput_timer timer;
+		uint64_t start;
+		double x, y;
+		int direction;
+	} scroll_coast;
+
+	struct {
+		struct libinput_timer timer;
 		struct libinput_device_config_scroll_method config;
 		/* Currently enabled method, button */
 		enum libinput_config_scroll_method method;
@@ -544,6 +551,9 @@ evdev_init_natural_scroll(struct evdev_device *device);
 void
 evdev_init_button_scroll(struct evdev_device *device,
 			 void (*change_scroll_method)(struct evdev_device *));
+
+void
+evdev_init_scroll_coast(struct evdev_device *device);
 
 int
 evdev_update_key_down_count(struct evdev_device *device,

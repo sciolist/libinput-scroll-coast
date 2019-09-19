@@ -1174,6 +1174,7 @@ tp_unhover_pressure(struct tp_dispatch *tp, uint64_t time)
 							"pressure: begin touch %d\n",
 							t->index);
 					/* avoid jumps when landing a finger */
+					tp->device->scroll_coast.start = 0;
 					tp_motion_history_reset(t);
 					tp_begin_touch(tp, t, time);
 				}
@@ -2901,6 +2902,8 @@ tp_init_scroll(struct tp_dispatch *tp, struct evdev_device *device)
 	tp_edge_scroll_init(tp, device);
 
 	evdev_init_natural_scroll(device);
+
+	evdev_init_scroll_coast(device);
 
 	tp->scroll.config_method.get_methods = tp_scroll_config_scroll_method_get_methods;
 	tp->scroll.config_method.set_method = tp_scroll_config_scroll_method_set_method;
