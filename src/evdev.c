@@ -217,7 +217,7 @@ evdev_scroll_coast_timeout(uint64_t time, void *data)
 
 	const struct discrete_coords dist_discrete = { 0.0, 0.0 };
 
-	pointer_notify_axis(&device->base,
+	evdev_notify_axis(device,
 				time,
 				device->scroll_coast.direction,
 				LIBINPUT_POINTER_AXIS_SOURCE_FINGER,
