@@ -201,7 +201,7 @@ evdev_scroll_coast_timeout(uint64_t time, void *data)
 	struct evdev_device *device = data;
 	if (!device->scroll_coast.start) return;
 
-	static const double decay_time = 0.8 * 1000000;
+	static const double decay_time = 1.5 * 1000000;
 	
 	double progress = 1 - (double)((time - device->scroll_coast.start)) / decay_time;
 	double multiplier = progress;
